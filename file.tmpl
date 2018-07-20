@@ -2,3 +2,5 @@
 {{ range $k, $v := $.msg2 }}
 {{ $k }} ==> {{ $v }}
 {{- end }}
+
+{{ .msg | upper | repeat 5 }}

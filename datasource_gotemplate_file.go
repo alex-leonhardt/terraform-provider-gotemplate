@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path"
 	"reflect"
 	"text/template"
 
+	"github.com/Masterminds/sprig"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 
@@ -73,23 +75,27 @@ func renderFile(d *schema.ResourceData) (string, error) {
 		},
 	}
 
+	for k, v := range sprig.TxtFuncMap() {
+		tf[k] = v
+	}
+
 	var data string // data from tf
 	data = d.Get("data").(string)
 
 	// unmarshal json from data into m
 	var m = make(map[string]interface{}) // unmarshal data into m
 	if err = json.Unmarshal([]byte(data), &m); err != nil {
-		panic(err)
+		return "", templateRenderError(fmt.Errorf("failed to render %v", err))
 	}
 
 	templateFile := d.Get("template").(string)
-	t, err := template.ParseFiles(templateFile)
+	baseName := path.Base(templateFile)
+	tt, err := template.New(baseName).Funcs(tf).ParseFiles(templateFile)
 	if err != nil {
-		panic(err)
+		return "", templateRenderError(fmt.Errorf("failed to render %v", err))
 	}
 
 	var contents bytes.Buffer // io.writer for template.Execute
-	tt := t.Funcs(tf)
 	if tt != nil {
 		err = tt.Execute(&contents, m)
 		if err != nil {
