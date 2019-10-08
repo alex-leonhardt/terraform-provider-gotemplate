@@ -3,25 +3,63 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"text/template"
 
+	"github.com/giantswarm/microerror"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 
-// ---------------------------------------
+const (
+	nestedTemplatesDir = "files"
+)
 
 func hash(s string) string {
 	sha := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sha[:])
 }
 
-type templateRenderError error
+// files is map[string]string (k: filename, v: contents) for files that are fetched from disk
+// and then filled with data.
+type files map[string]string
 
-func renderFile(d *schema.ResourceData) (string, error) {
+// RenderNestedTemplates walks over templatesDir and parses all regular files with
+// text/template. Parsed templates are then rendered with ctx, base64 encoded
+// and added to returned files.
+func renderNestedTemplates(templatesDir string, ctx interface{}) (files, error) {
+	files := files{}
+
+	err := filepath.Walk(templatesDir, func(path string, f os.FileInfo, err error) error {
+		if f.Mode().IsRegular() {
+			tmpl, err := template.ParseFiles(path)
+			if err != nil {
+				return microerror.Maskf(err, "failed to parse file %#q", path)
+			}
+			var data bytes.Buffer
+			tmpl.Execute(&data, ctx)
+
+			relativePath, err := filepath.Rel(templatesDir, path)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+			files[relativePath] = base64.StdEncoding.EncodeToString(data.Bytes())
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	return files, nil
+}
+
+func renderMainTemplate(d *schema.ResourceData) (string, error) {
 
 	var err error
 
@@ -83,6 +121,14 @@ func renderFile(d *schema.ResourceData) (string, error) {
 	}
 
 	templateFile := d.Get("template").(string)
+	templatesDir := filepath.Join(filepath.Dir(templateFile), nestedTemplatesDir)
+
+	// render nested templates
+	m["Files"], err = renderNestedTemplates(templatesDir, m)
+	if err != nil {
+		panic(err)
+	}
+
 	t, err := template.ParseFiles(templateFile)
 	if err != nil {
 		panic(err)
@@ -103,7 +149,7 @@ func renderFile(d *schema.ResourceData) (string, error) {
 }
 
 func dataSourceFileRead(d *schema.ResourceData, meta interface{}) error {
-	rendered, err := renderFile(d)
+	rendered, err := renderMainTemplate(d)
 	if err != nil {
 		return err
 	}
