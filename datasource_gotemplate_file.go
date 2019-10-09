@@ -12,8 +12,10 @@ import (
 	"reflect"
 	"text/template"
 
-	"github.com/giantswarm/microerror"
 	"github.com/hashicorp/terraform/helper/schema"
+
+	ignition "github.com/giantswarm/k8scloudconfig/ignition/v_2_2_0"
+	"github.com/giantswarm/microerror"
 )
 
 const (
@@ -145,6 +147,17 @@ func renderMainTemplate(d *schema.ResourceData) (string, error) {
 		return "", templateRenderError(fmt.Errorf("error: %v", err))
 	}
 
+	// generate ignition if requested
+	is_ignition := d.Get("is_ignition").(bool)
+	if is_ignition {
+		ignition_content, err := ignition.ConvertTemplatetoJSON(contents.Bytes())
+		if err != nil {
+			panic(err)
+		}
+
+		return string(ignition_content), nil
+	}
+
 	return contents.String(), nil
 }
 
@@ -174,6 +187,13 @@ func dataSourceFile() *schema.Resource {
 				Default:      "",
 				Description:  "variables to substitute",
 				ValidateFunc: nil,
+			},
+			"is_ignition": &schema.Schema{
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    false,
+				Description: "return ignition in rendered",
+				Default:     false,
 			},
 			"rendered": &schema.Schema{
 				Type:        schema.TypeString,
