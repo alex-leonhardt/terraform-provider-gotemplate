@@ -14,7 +14,7 @@ import (
 
 	"github.com/hashicorp/terraform/helper/schema"
 
-	ignition "github.com/giantswarm/k8scloudconfig/ignition/v_2_2_0"
+	"github.com/giantswarm/k8scloudconfig/v10/pkg/ignition"
 	"github.com/giantswarm/microerror"
 )
 
