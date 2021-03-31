@@ -41,7 +41,7 @@ func renderNestedTemplates(templatesDir string, ctx interface{}) (files, error) 
 		if f.Mode().IsRegular() {
 			tmpl, err := template.ParseFiles(path)
 			if err != nil {
-				return microerror.Maskf(err, "failed to parse file %#q", path)
+				return microerror.Mask(err)
 			}
 			var data bytes.Buffer
 			tmpl.Execute(&data, ctx)
